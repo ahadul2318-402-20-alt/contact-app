@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import '../database/database_helper.dart';
-import '../models/contact.dart';
-import '../widgets/contact_tile.dart';
-import 'add_contact_screen.dart';
-import 'contact_details_screen.dart';
-import 'settings_screen.dart';
+import 'package:contact_app/database/database_helper.dart';
+import 'package:contact_app/models/contact.dart';
+import 'package:contact_app/screens/add_contact_screen.dart';
+import 'package:contact_app/screens/contact_details_screen.dart';
+import 'package:contact_app/screens/favorites_screen.dart';
+import 'package:contact_app/screens/settings_screen.dart';
+import 'package:contact_app/screens/about_screen.dart';
+import 'package:contact_app/widgets/contact_tile.dart';
 
 class ContactListScreen extends StatefulWidget {
   const ContactListScreen({super.key});
@@ -14,12 +16,10 @@ class ContactListScreen extends StatefulWidget {
 }
 
 class _ContactListScreenState extends State<ContactListScreen> {
-  final DatabaseHelper _db = DatabaseHelper();
   List<Contact> _contacts = [];
   List<Contact> _filteredContacts = [];
-  bool _isLoading = true;
-  bool _showFavoritesOnly = false;
-  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -28,34 +28,64 @@ class _ContactListScreenState extends State<ContactListScreen> {
   }
 
   Future<void> _loadContacts() async {
-    setState(() => _isLoading = true);
-    try {
-      final contacts = await _db.getAllContacts();
-      setState(() {
-        _contacts = contacts;
-        _filteredContacts = contacts;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-    }
+    final db = DatabaseHelper();
+    final contacts = await db.getAllContacts(); // adjust method name if needed
+    setState(() {
+      _contacts = contacts;
+      _filteredContacts = contacts;
+    });
   }
 
-  void _filterContacts() {
-    List<Contact> filtered = _contacts;
-    if (_showFavoritesOnly) {
-      filtered = filtered.where((c) => c.isFavorite).toList();
-    }
-    if (_searchQuery.isNotEmpty) {
-      filtered = filtered
-          .where(
-            (c) => c.name.toLowerCase().contains(_searchQuery.toLowerCase()),
-          )
-          .toList();
-    }
+  void _filterContacts(String query) {
     setState(() {
-      _filteredContacts = filtered;
+      if (query.isEmpty) {
+        _filteredContacts = _contacts;
+      } else {
+        _filteredContacts = _contacts
+            .where(
+              (contact) =>
+                  contact.name.toLowerCase().contains(query.toLowerCase()),
+            )
+            .toList();
+      }
     });
+  }
+
+  void _focusSearch() {
+    _searchFocusNode.requestFocus();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _filterContacts('');
+    _searchFocusNode.unfocus();
+  }
+
+  void _logout() {
+    // Show a confirmation dialog or handle logout logic
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Add your logout logic here
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Logged out successfully')),
+              );
+            },
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -64,141 +94,212 @@ class _ContactListScreenState extends State<ContactListScreen> {
       appBar: AppBar(
         title: const Text('My Contacts'),
         actions: [
-          IconButton(
-            icon: Icon(
-              _showFavoritesOnly ? Icons.favorite : Icons.favorite_border,
-              color: _showFavoritesOnly ? Colors.red : null,
-            ),
-            onPressed: () {
-              setState(() {
-                _showFavoritesOnly = !_showFavoritesOnly;
-                _filterContacts();
-              });
-            },
-            tooltip: 'Show favorites only',
-          ),
+          // Search icon – focuses the search field below
+          IconButton(icon: const Icon(Icons.search), onPressed: _focusSearch),
+          // Settings icon
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (ctx) => const SettingsScreen()),
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
               );
             },
           ),
         ],
       ),
+      // Drawer exactly like your screenshot
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            Container(
+              height: 120,
+              decoration: const BoxDecoration(color: Colors.teal),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'My Contacts',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Manage your friends easily',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.people),
+              title: const Text('My Contacts'),
+              onTap: () =>
+                  Navigator.pop(context), // close drawer, already on home
+            ),
+            ListTile(
+              leading: const Icon(Icons.favorite),
+              title: const Text('Favorites'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_add),
+              title: const Text('Add Contact'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddContactScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info),
+              title: const Text('About App'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text('Settings'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('Logout', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                _logout();
+              },
+            ),
+          ],
+        ),
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
+          // Search bar below the AppBar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.grey.shade50,
             child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              onChanged: _filterContacts,
               decoration: InputDecoration(
                 hintText: 'Search contacts...',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: _clearSearch,
+                      )
+                    : null,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: Theme.of(context).brightness == Brightness.light
-                    ? Colors.grey.shade100
-                    : Colors.grey.shade800,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 16,
+                ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                  _filterContacts();
-                });
-              },
             ),
           ),
+          // Contact list
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredContacts.isEmpty
-                ? _buildEmptyState()
+            child: _filteredContacts.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.contacts, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          'No contacts yet',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Add your first contact by tapping the + button below.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: _filteredContacts.length,
-                    itemBuilder: (ctx, index) {
+                    itemBuilder: (context, index) {
                       final contact = _filteredContacts[index];
                       return ContactTile(
                         contact: contact,
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (ctx) =>
+                              builder: (_) =>
                                   ContactDetailsScreen(contact: contact),
                             ),
-                          ).then((_) => _loadContacts());
+                          );
+                          _loadContacts();
                         },
-                        onFavoriteToggle: () => _toggleFavorite(contact),
+                        onFavoriteToggle: () async {
+                          final db = DatabaseHelper();
+                          final updated = Contact(
+                            id: contact.id,
+                            name: contact.name,
+                            phoneNumber: contact.phoneNumber,
+                            email: contact.email,
+                            address: contact.address,
+                            isFavorite: !contact.isFavorite,
+                          );
+                          await db.updateContact(updated);
+                          _loadContacts();
+                        },
                       );
                     },
                   ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await Navigator.push(
             context,
-            MaterialPageRoute(builder: (ctx) => const AddContactScreen()),
-          ).then((_) => _loadContacts());
+            MaterialPageRoute(builder: (_) => const AddContactScreen()),
+          );
+          _loadContacts();
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Add Contact'),
+        child: const Icon(Icons.add),
       ),
     );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.contacts_outlined, size: 80, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            _showFavoritesOnly && _contacts.isEmpty
-                ? 'No contacts yet'
-                : _showFavoritesOnly
-                ? 'No favorite contacts'
-                : 'No contacts yet',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _showFavoritesOnly && _contacts.isEmpty
-                ? 'Add your first contact by tapping the + button below.'
-                : _showFavoritesOnly
-                ? 'Mark contacts as favorite to see them here.'
-                : 'Add your first contact by tapping the + button below.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade500),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _toggleFavorite(Contact contact) async {
-    final updatedContact = Contact(
-      id: contact.id,
-      name: contact.name,
-      phoneNumber: contact.phoneNumber,
-      email: contact.email,
-      address: contact.address,
-      isFavorite: !contact.isFavorite,
-    );
-    await _db.updateContact(updatedContact);
-    await _loadContacts();
-    _filterContacts();
   }
 }
